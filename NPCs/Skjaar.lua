@@ -1,6 +1,6 @@
 --[[
 * RL860 - Real Map Cloje Project v8.60
-* Database for Skjaar, guardian of the crypt in the mount sternum and master mage
+* Skjaar.lua: Database for Skjaar, guardian of the crypt in the mount sternum and master mage
 ]]--
 
 local npc = OtNpcSystem:Init()
@@ -24,10 +24,7 @@ end
 npc:addAction(
 	ACTION_NOTFOCUSED,
 	{
-		keywords = {
-			{ "hi$" },
-			{ "hello$" }
-		},
+		keywords = { "hi$" },
 		reply = "I don't talk to little children!!"
 	},
 	function( player, parameters, self )
@@ -35,13 +32,12 @@ npc:addAction(
 	end
 )
 
+npc:addAliasAction( { "hello$" } )
+
 npc:addAction(
 	ACTION_GREET,
 	{
-		keywords = {
-			{ "hi$" },
-			{ "hello$" }
-		},
+		keywords = { "hi$" },
 		reply = "Hail, friend of nature! How may I help you?"
 	},
 	function( player, parameters, self )
@@ -49,13 +45,12 @@ npc:addAction(
 	end
 )
 
+npc:addAliasAction( { "hello$" } )
+
 npc:addAction(
 	ACTION_GREET,
 	{
-		keywords = {
-			{ "hi$" },
-			{ "hello$" }
-		},
+		keywords = { "hi$" },
 		reply = "Another creature who believes thinks physical strength is more important than wisdom! Why are you disturbing me?"
 	},
 	function( player, parameters, self )
@@ -63,13 +58,12 @@ npc:addAction(
 	end
 )
 
+npc:addAliasAction( { "hello$" } )
+
 npc:addAction(
 	ACTION_GREET,
 	{
-		keywords = {
-			{ "hi$" },
-			{ "hello$" }
-		},
+		keywords = { "hi$" },
 		reply = "Neither strong enough to be a knight nor wise enough to be a real mage. You like it easy, don't you? Why are you disturbing me?"
 	},
 	function( player, parameters, self )
@@ -77,19 +71,20 @@ npc:addAction(
 	end
 )
 
+npc:addAliasAction( { "hello$" } )
+
 npc:addAction(
 	ACTION_GREET,
 	{
-		keywords = {
-			{ "hi$" },
-			{ "hello$" }
-		},
+		keywords = { "hi$" },
 		reply = "It's good to see somebody who has chosen the path of wisdom. What do you want?"
 	},
 	function( player, parameters, self )
 		return player:isSorcerer()
 	end
 )
+
+npc:addAliasAction( { "hello$" } )
 
 npc:addAction(
 	ACTION_VANISH,
@@ -101,10 +96,8 @@ npc:addAction(
 npc:addAction(
 	ACTION_FAREWELL,
 	{
-		keywords = {
-			{ "bye" },
-			{ "farewell" }
-		},
+		keywords = { "bye" },
+			{ "farewell" },
 		reply = "Farewell, %N!"
 	}
 )
@@ -112,22 +105,15 @@ npc:addAction(
 npc:addAction(
 	ACTION_KEYWORD,
 	{
-		keywords = {
-			{ "job" }
-		},
+		keywords = { "job" },
 		reply = "Once I was the master of all mages, but now I only protect this crypt."
 	}
 )
 
-
-
-
 npc:addAction(
 	ACTION_KEYWORD,
 	{
-		keywords = {
-			{ "name" }
-		},
+		keywords = { "name" },
 		reply = "I am Skjaar the Mage, master of all spells."
 	}
 )
@@ -135,9 +121,7 @@ npc:addAction(
 npc:addAction(
 	ACTION_KEYWORD,
 	{
-		keywords = {
-			{ "door" }
-		},
+		keywords = { "door" },
 		reply = "This door seals a crypt."
 	}
 )
@@ -145,9 +129,7 @@ npc:addAction(
 npc:addAction(
 	ACTION_KEYWORD,
 	{
-		keywords = {
-			{ "crypt" }
-		},
+		keywords = { "crypt" },
 		reply = "Here lies my master. Only his closest followers may enter."
 	}
 )
@@ -155,9 +137,7 @@ npc:addAction(
 npc:addAction(
 	ACTION_KEYWORD,
 	{
-		keywords = {
-			{ "help" }
-		},
+		keywords = { "help" },
 		reply = "I'm not here to help anybody. I only protect my master's crypt."
 	}
 )
@@ -165,9 +145,7 @@ npc:addAction(
 npc:addAction(
 	ACTION_KEYWORD,
 	{
-		keywords = {
-			{ "mountain" }
-		},
+		keywords = { "mountain" },
 		reply = "Hundreds of years my master's castle stood on the top of this mountain. Now there is a volcano."
 	}
 )
@@ -175,9 +153,7 @@ npc:addAction(
 npc:addAction(
 	ACTION_KEYWORD,
 	{
-		keywords = {
-			{ "volcano" }
-		},
+		keywords = { "volcano" },
 		reply = "I can still feel the magical energy in the volcano."
 	}
 )
@@ -185,9 +161,7 @@ npc:addAction(
 npc:addAction(
 	ACTION_KEYWORD,
 	{
-		keywords = {
-			{ "castle" }
-		},
+		keywords = { "castle" },
 		reply = "The castle was destroyed when my master tried to summon a nameless creature. All that is left is this volcano."
 	}
 )
@@ -195,9 +169,7 @@ npc:addAction(
 npc:addAction(
 	ACTION_KEYWORD,
 	{
-		keywords = {
-			{ "time" }
-		},
+		keywords = { "time" },
 		reply = "To those who have lived for a thousand years time holds no more terror."
 	}
 )
@@ -205,9 +177,7 @@ npc:addAction(
 npc:addAction(
 	ACTION_KEYWORD,
 	{
-		keywords = {
-			{ "master" }
-		},
+		keywords = { "master" },
 		reply = "If you are one of his followers, you need not ask about him, for you will know. And if you aren't, you are not worthy anyway!"
 	}
 )
@@ -215,11 +185,7 @@ npc:addAction(
 npc:addAction(
 	ACTION_KEYWORD,
 	{
-		keywords = {
-			{ "idiot" },
-			{ "fuck" },
-			{ "asshole" }
-		},
+		keywords = { "idiot" },
 		reply = "Take this for your words!"
 	},
 	function( player, parameters, self )
@@ -230,19 +196,13 @@ npc:addAction(
 	end
 )
 
-
-
-
-
-
-
+npc:addAliasAction( { "fuck" } )
+npc:addAliasAction( { "asshole" } )
 
 npc:addAction(
 	ACTION_KEYWORD,
 	{
-		keywords = {
-			{ "key" }
-		},
+		keywords = { "key" },
 		reply = "I will give the key to the crypt only to the closest followers of my master. Would you like me to test you?",
 		talkstate = 1
 	}
@@ -251,9 +211,7 @@ npc:addAction(
 npc:addAction(
 	ACTION_KEYWORD,
 	{
-		keywords = {
-			{ "yes" }
-		},
+		keywords = { "yes" },
 		reply = "Before we start I must ask you for a small donation of 1000 gold coins. Are you willing to pay 1000 gold coins for the test?",
 		talkstate = 2
 	},
@@ -265,9 +223,7 @@ npc:addAction(
 npc:addAction(
 	ACTION_KEYWORD,
 	{
-		keywords = {
-			{ "no" }
-		},
+		keywords = { "no" },
 		reply = "Then leave, unworthy worm!"
 	},
 	function( player, parameters, self )
@@ -282,9 +238,7 @@ npc:addAction(
 npc:addAction(
 	ACTION_KEYWORD,
 	{
-		keywords = {
-			{ "" }
-		},
+		keywords = { "" },
 		reply = "You're not worthy if you cannot make up your mind. Leave!"
 	},
 	function( player, parameters, self )
@@ -299,9 +253,7 @@ npc:addAction(
 npc:addAction(
 	ACTION_KEYWORD,
 	{
-		keywords = {
-			{ "yes" }
-		},
+		keywords = { "yes" },
 		reply = "All right then. Here comes the first question. What was the name of Dago's favourite pet?",
 		talkstate = 3
 	},
@@ -317,9 +269,7 @@ npc:addAction(
 npc:addAction(
 	ACTION_KEYWORD,
 	{
-		keywords = {
-			{ "yes" }
-		},
+		keywords = { "yes" },
 		reply = "You don't even have the money to make a donation? Then go!"
 	},
 	function( player, parameters, self )
@@ -334,9 +284,7 @@ npc:addAction(
 npc:addAction(
 	ACTION_KEYWORD,
 	{
-		keywords = {
-			{ "no" }
-		},
+		keywords = { "no" },
 		reply = "You're not worthy then. Now leave!"
 	},
 	function( player, parameters, self )
@@ -351,9 +299,7 @@ npc:addAction(
 npc:addAction(
 	ACTION_KEYWORD,
 	{
-		keywords = {
-			{ "" }
-		},
+		keywords = { "" },
 		reply = "You're not worthy if you cannot make up your mind. Leave!"
 	},
 	function( player, parameters, self )
@@ -368,9 +314,7 @@ npc:addAction(
 npc:addAction(
 	ACTION_KEYWORD,
 	{
-		keywords = {
-			{ "redips" }
-		},
+		keywords = { "redips" },
 		reply = "Perhaps you knew him after all. Tell me - how many fingers did he have when he died?",
 		talkstate = 4
 	},
@@ -382,9 +326,7 @@ npc:addAction(
 npc:addAction(
 	ACTION_KEYWORD,
 	{
-		keywords = {
-			{ "" }
-		},
+		keywords = { "" },
 		reply = "You are wrong. Get lost!"
 	},
 	function( player, parameters, self )
@@ -399,10 +341,7 @@ npc:addAction(
 npc:addAction(
 	ACTION_KEYWORD,
 	{
-		keywords = {
-			{ "7" },
-			{ "seven" }
-		},
+		keywords = { "7" },
 		reply = "Also true. But can you also tell me the colour of the deamons in which master specialized?",
 		talkstate = 5
 	},
@@ -411,12 +350,12 @@ npc:addAction(
 	end
 )
 
+npc:addAliasAction( { "seven" } )
+
 npc:addAction(
 	ACTION_KEYWORD,
 	{
-		keywords = {
-			{ "" }
-		},
+		keywords = { "" },
 		reply = "You are wrong. Get lost!"
 	},
 	function( player, parameters, self )
@@ -431,9 +370,7 @@ npc:addAction(
 npc:addAction(
 	ACTION_KEYWORD,
 	{
-		keywords = {
-			{ "black" }
-		},
+		keywords = { "black" },
 		reply = "It seems you are worthy after all. Do you want the key to the crypt?",
 		talkstate = 6
 	},
@@ -445,9 +382,7 @@ npc:addAction(
 npc:addAction(
 	ACTION_KEYWORD,
 	{
-		keywords = {
-			{ "" }
-		},
+		keywords = { "" },
 		reply = "You are wrong. Get lost!"
 	},
 	function( player, parameters, self )
@@ -462,9 +397,7 @@ npc:addAction(
 npc:addAction(
 	ACTION_KEYWORD,
 	{
-		keywords = {
-			{ "yes" }
-		},
+		keywords = { "yes" },
 		reply = "Here you are."
 	},
 	function( player, parameters, self )
@@ -479,9 +412,7 @@ npc:addAction(
 npc:addAction(
 	ACTION_KEYWORD,
 	{
-		keywords = {
-			{ "" }
-		},
+		keywords = { "" },
 		reply = "It is always a wise decision to leave the dead alone."
 	},
 	function( player, parameters, self )

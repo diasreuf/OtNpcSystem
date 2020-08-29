@@ -157,8 +157,10 @@ function OtNpcSystem:onCreatureSay( cid, type, message )
 		self:internalGreetAction( cid, action )
 	elseif action.type == ACTION_FAREWELL then
 		self:internalFarewellAction( cid, action )
-	elseif action.type == ACTION_KEYWORD or action.type == ACTION_NOTFOCUSED then
+	elseif action.type == ACTION_KEYWORD then
 		self:internalKeywordAction( cid, action )
+	elseif action.type == ACTION_NOTFOCUSED then
+		self:internalNotFocusedAction( cid, action )
 	elseif action.type == ACTION_TRADE then
 		
 	end
@@ -257,14 +259,36 @@ end
 
 --[[
 * @func: internalKeywordAction( cid, action )
-* @desc: Process NPC keyword/notfocused action
+* @desc: Process NPC keyword action
 * @cid: creatureId
-* @action: keyword/notfocused action
+* @action: keyword action
 ]]--
 
 function OtNpcSystem:internalKeywordAction( cid, action )
 	
-	if not self:isFocused( cid ) and action.type ~= ACTION_NOTFOCUSED then
+	if not self:isFocused( cid ) then
+		return false
+	end
+
+	if not action.parameters.reply then
+		return false
+	end
+	
+	self:processSay( cid, action.parameters.reply )
+
+	return true
+end
+
+--[[
+* @func: internalNotFocusedAction( cid, action )
+* @desc: Process NPC notfocused action
+* @cid: creatureId
+* @action: notfocused action
+]]--
+
+function OtNpcSystem:internalNotFocusedAction( cid, action )
+	
+	if self:isFocused( cid ) then
 		return false
 	end
 
@@ -287,14 +311,47 @@ end
 ]]--
 
 function OtNpcSystem:addAction( type, parameters, condition, action )
+
+	if type == nil or parameters == nil then
+		return false
+	end
 	
+	local keywords = {}
+	if parameters.keywords ~= nil then
+		table.insert( keywords, parameters.keywords )
+		parameters.keywords = nil
+	end
+
 	table.insert( self.Actions, {
 		type = type,
+		keywords = keywords,
 		parameters = parameters,
 		condition = condition,
 		action = action
 	} )
 
+	return true
+end
+
+--[[
+* @func: addAliasKeyword( keyword )
+* @desc: Add alias keyword to last action
+* @type: keyword to match
+]]--
+
+function OtNpcSystem:addAliasKeyword( keyword )
+
+	if keyword == nil then
+		return false
+	end
+	
+	local action = self.Actions[ #self.Actions ]
+	if action ~= nil then
+		table.insert( action.keywords, keyword )
+		return true
+	end
+
+	return false
 end
 
 --[[
@@ -329,11 +386,11 @@ end
 
 function OtNpcSystem:findActionKeyword( action, message )
 
-	if type( action.parameters.keywords ) ~= "table" then
+	if type( action.keywords ) ~= "table" then
 		return false
 	end
 
-	for _, keyword in pairs( action.parameters.keywords ) do
+	for _, keyword in pairs( action.keywords ) do
 		if self:processInternalKeyword( keyword, message ) then
 			return true
 		end
