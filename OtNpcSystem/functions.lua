@@ -105,3 +105,34 @@ function doPlayerBuyItemContainer(cid, containerid, itemid, count, cost, charges
 	end
 	return true
 end
+
+function doPlayerTakeMoney( cid, amount )
+
+	local player = Player( cid )
+	if not player then
+		return false
+	end
+	
+	local moneyCount = player:getMoney()
+	local bankCount = player:getBankBalance()
+
+	if amount > ( moneyCount + bankCount ) then
+		return false
+	end
+
+    player:removeMoney( math.min( amount, moneyCount ) )
+	
+    if amount > moneyCount then
+        
+		player:setBankBalance( bankCount - math.max( amount - moneyCount, 0 ) )
+		
+        if moneyCount == 0 then
+            player:sendTextMessage( MESSAGE_INFO_DESCR, ( "Paid %d gold from bank account. Your account balance is now %d gold." ):format( amount, player:getBankBalance() ) )
+        else
+            player:sendTextMessage( MESSAGE_INFO_DESCR, ( "Paid %d from inventory and %d gold from bank account. Your account balance is now %d gold." ):format( moneyCount, amount - moneyCount, player:getBankBalance() ) )
+        end
+	
+    end
+	
+	return true
+end

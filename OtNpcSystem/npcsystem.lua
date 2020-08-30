@@ -40,7 +40,8 @@ OtNpcSystem = {
 	Focuses = nil,
 	TalkStates = nil,
 	TalkLasts = nil,
-	
+	TradeWindows = nil,
+
 	IdleTime = 30,
 	TalkRadius = 3,
 	
@@ -59,6 +60,7 @@ function OtNpcSystem:Init()
 	npcsystem.TalkStates = {}
 	npcsystem.Focuses = {}
 	npcsystem.TalkLasts = {}
+	npcsystem.TradeWindows = {}
 
 	setmetatable( npcsystem, self )
 	self.__index = self
@@ -154,15 +156,15 @@ function OtNpcSystem:onCreatureSay( cid, type, message )
 	end
 
 	if action.type == ACTION_GREET then
-		self:internalGreetAction( cid, action )
+		self:internalGreetAction( player:getId(), action )
 	elseif action.type == ACTION_FAREWELL then
-		self:internalFarewellAction( cid, action )
+		self:internalFarewellAction( player:getId(), action )
 	elseif action.type == ACTION_KEYWORD then
-		self:internalKeywordAction( cid, action )
+		self:internalKeywordAction( player:getId(), action )
 	elseif action.type == ACTION_NOTFOCUSED then
-		self:internalNotFocusedAction( cid, action )
+		self:internalNotFocusedAction( player:getId(), action )
 	elseif action.type == ACTION_TRADE then
-		
+		self:internalTradeAction( player:getId(), action )
 	end
 	
 	self:setTalkState( player:getId(), ( action.parameters.talkstate ~= 0 and action.parameters.talkstate or 0 ) )
@@ -273,7 +275,7 @@ function OtNpcSystem:internalKeywordAction( cid, action )
 	if not action.parameters.reply then
 		return false
 	end
-	
+
 	self:processSay( cid, action.parameters.reply )
 
 	return true
@@ -291,6 +293,44 @@ function OtNpcSystem:internalNotFocusedAction( cid, action )
 	if self:isFocused( cid ) then
 		return false
 	end
+
+	if not action.parameters.reply then
+		return false
+	end
+	
+	self:processSay( cid, action.parameters.reply )
+
+	return true
+end
+
+--[[
+* @func: internalTradeAction( cid, action )
+* @desc: Process NPC trade window
+* @cid: creatureId
+* @action: notfocused action
+]]--
+
+function OtNpcSystem:internalTradeAction( cid, action )
+	
+	if not self:isFocused( cid ) then
+		return false
+	end
+	
+	local tradeWindow = self.TradeWindows[ cid ]
+	if not tradeWindow then
+		return false
+	end
+	
+	openShopWindow(
+		cid,
+		tradeWindow,
+		function( cid, itemid, subType, amount, ignoreCap, inBackpacks )
+			self:internalBuyCallback( cid, itemid, subType, amount, ignoreCap, inBackpacks )
+		end,
+		function( cid, itemid, subType, amount, ignoreCap, inBackpacks )
+			self:internalSellCallback( cid, itemid, subType, amount, ignoreCap, inBackpacks )
+		end
+	)
 
 	if not action.parameters.reply then
 		return false
@@ -521,6 +561,8 @@ function OtNpcSystem:addFocus( cid )
 	end
 
 	self.TalkLasts[ cid ] = os.time()
+	self.TradeWindows[ cid ] = {}
+
 	table.insert( self.Focuses, cid )
 
 	self:setTalkState( cid, 0 )
@@ -543,7 +585,8 @@ function OtNpcSystem:releaseFocus( cid )
 
 	self.TalkStates[ cid ] = nil
 	self.TalkLasts[ cid ] = nil
-	
+	self.TradeWindows[ cid ] = nil
+
 	local cidPos = nil
 	for k, v in pairs( self.Focuses ) do
 		if v == cid then
@@ -724,6 +767,191 @@ function OtNpcSystem:setIdle( cid )
 	addEvent( function( self, cid )
 		self:releaseFocus( cid )
 	end, 1000, self, cid )
+	
+	return true
+end
+
+--[[
+* @func: internalBuyCallback( cid, itemid, subType, amount, ignoreCap, inBackpacks )
+* @desc: Process trade window buy action
+* @cid: creatureId
+* @itemid: buyable item id
+* @subtype: item subtype
+* @amount: item amount
+* @ignoreCap: ignore capacity on buy
+* @inBackpacks: buy items in backpacks
+]]--
+
+function OtNpcSystem:internalBuyCallback( cid, itemid, subType, amount, ignoreCap, inBackpacks )
+
+	local player = Player( cid )
+	if not player then
+		return false
+	end
+	
+	local shopItem = self:internalGetTradeItem( player:getId(), itemid, subType, true )
+	if shopItem == nil or shopItem.buy == -1 then
+		return false
+	end
+
+	local backpackId = 1988
+	local totalCost = amount * shopItem.buy
+	
+	if inBackpacks then
+		totalCost = isItemStackable( itemid ) == true and totalCost + 20 or totalCost + ( math.max(1, math.floor( amount / getContainerCapById( backpackId ) ) ) * 20 )
+	end
+	
+	local subType = shopItem.subType or 1
+	local a, b = doNpcSellItem( cid, itemid, amount, subType, ignoreCap, inBackpacks, backpackId )
+	
+	if a < amount then
+
+		doPlayerSendCancel( cid, ( a == 0 and "You do not have enough capacity." or "You do not have enough capacity for all items." ) )
+
+		if a > 0 then
+			player:removeMoney( ( ( a * shopItem.buy ) + ( b * 20 ) ) )
+			return true
+		end
+
+		return false
+	end
+	
+	doPlayerTakeMoney( player:getId(), totalCost )
+	doPlayerSendTextMessage( cid, MESSAGE_INFO_DESCR, string.format( "Bought %dx %s for %d gold.", amount, ItemType( itemid ):getName(), totalCost ) )
+
+	local action = self:findAction( cid, ACTION_TRADE_BUY_REPLY )
+	if action ~= false and action.parameters.reply ~= nil then
+		self:processSay( cid, string.gsub( action.parameters.reply, "%%P", totalCost ) )
+	end
+	
+	self.TalkLasts[ player:getId() ] = os.time()
+
+	return true
+end
+
+--[[
+* @func: internalSellCallback( cid, itemid, subType, amount, ignoreCap, inBackpacks )
+* @desc: Process trade window sell action
+* @cid: creatureId
+* @itemid: sellable item id
+* @subtype: item subtype
+* @amount: item amount
+* @ignoreCap: ignore capacity on sell
+* @inBackpacks: sell items in backpacks
+]]--
+
+function OtNpcSystem:internalSellCallback( cid, itemid, subType, amount, ignoreCap, inBackpacks )
+	
+	local player = Player( cid )
+	if not player then
+		return false
+	end
+	
+	local shopItem = self:internalGetTradeItem( player:getId(), itemid, subType, false )
+	if shopItem == nil or shopItem.sell == -1 then
+		return false
+	end
+
+	if not isItemFluidContainer( itemid ) then
+		subType = -1
+	end
+	
+	local totalCost = ( amount * shopItem.sell )
+
+	if not doPlayerRemoveItem( player:getId(), itemid, amount, subType, ignoreEquipped ) then
+		doPlayerSendCancel( player:getId(), "You do not have this object." )
+		return false
+	end
+	
+	doPlayerAddMoney( player:getId(), totalCost )
+	doPlayerSendTextMessage( player:getId(), MESSAGE_INFO_DESCR, string.format( "Sold %dx %s for %d gold.", amount, ItemType( itemid ):getName():lower(), totalCost ) )
+
+	local action = self:findAction( player:getId(), ACTION_TRADE_SELL_REPLY )
+	if action ~= false and action.parameters.reply ~= nil then
+		self:processSay( player:getId(), string.gsub( action.parameters.reply, "%%P", totalCost ) )
+	end
+	
+	self.TalkLasts[ player:getId() ] = os.time()
+
+	return true
+end
+
+--[[
+* @func: internalGetTradeItem( cid, itemId, subType, onBuy )
+* @desc: Find requested item from Trade Window
+* @cid: creatureId
+* @itemid: item id
+* @subtype: item subtype
+* @onBuy: buying or selling?
+]]--
+
+function OtNpcSystem:internalGetTradeItem( cid, itemId, subType, onBuy )
+	
+	local tradeWindow = self.TradeWindows[ cid ]
+	if not tradeWindow then
+		return nil
+	end
+	
+	for i = 1, #tradeWindow do
+		local shopItem = self.TradeWindows[ cid ][ i ]
+		if ( ( isItemFluidContainer( shopItem.id ) and shopItem.id == itemId and shopItem.subType == subType ) or shopItem.id == itemId ) and ( not onBuy and shopItem.sell > 0 or onBuy and shopItem.buy > 0 ) then
+			return shopItem
+		end
+	end
+	
+	return nil
+end
+
+--[[
+* @func: addBuyableItem( cid, itemId, itemPrice, subType, itemName )
+* @desc: Adds an item to npc buyable table
+* @cid: creatureId
+* @itemid: item id
+* @itemPrice: item price
+* @subtype: item subtype
+* @itemName: item name (if empty, item name will be loadded from items.xml)
+]]--
+
+function OtNpcSystem:addBuyableItem( cid, itemId, itemPrice, subType, itemName )
+	
+	if itemId == nil or type( itemId ) ~= "number" then
+		return false
+	end
+	
+	table.insert( self.TradeWindows[ cid ], {
+		id = itemId,
+		buy = itemPrice,
+		sell = 0,
+		subType = subType,
+		name = ( itemName ~= nil and itemName or ItemType( itemId ):getName() )
+	} )
+	
+	return true
+end
+
+--[[
+* @func: addSellableItem( cid, itemId, itemPrice, subType, itemName )
+* @desc: Adds an item to npc sellable table
+* @cid: creatureId
+* @itemid: item id
+* @itemPrice: item price
+* @subtype: item subtype
+* @itemName: item name (if empty, item name will be loadded from items.xml)
+]]--
+
+function OtNpcSystem:addSellableItem( cid, itemId, itemPrice, subType, itemName )
+	
+	if itemId == nil or type( itemId ) ~= "number" then
+		return false
+	end
+	
+	table.insert( self.TradeWindows[ cid ], {
+		id = itemId,
+		buy = 0,
+		sell = itemPrice,
+		subType = subType,
+		name = ( itemName ~= nil and itemName or ItemType( itemId ):getName() )
+	} )
 	
 	return true
 end
