@@ -1,5 +1,5 @@
 --[[
-* OtNpcSystem v0.1
+* OtNpcSystem v0.4
 * by Robson Dias (diasreuf@gmail.com)
 * Based in "Advanced NPC System by Jiddo"
 ]]--
