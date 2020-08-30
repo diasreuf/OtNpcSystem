@@ -186,7 +186,7 @@ npc:addAction(
 	ACTION_TRADE,
 	{
 		keywords = { "trade" },
-		reply = "shit"
+		reply = "See my wares."
 	},
 	function( player, parameters, self )
 	

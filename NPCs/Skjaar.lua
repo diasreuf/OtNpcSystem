@@ -32,7 +32,7 @@ npc:addAction(
 	end
 )
 
-npc:addAliasAction( { "hello$" } )
+npc:addAliasKeyword( { "hello$" } )
 
 npc:addAction(
 	ACTION_GREET,
@@ -45,7 +45,7 @@ npc:addAction(
 	end
 )
 
-npc:addAliasAction( { "hello$" } )
+npc:addAliasKeyword( { "hello$" } )
 
 npc:addAction(
 	ACTION_GREET,
@@ -58,7 +58,7 @@ npc:addAction(
 	end
 )
 
-npc:addAliasAction( { "hello$" } )
+npc:addAliasKeyword( { "hello$" } )
 
 npc:addAction(
 	ACTION_GREET,
@@ -71,7 +71,7 @@ npc:addAction(
 	end
 )
 
-npc:addAliasAction( { "hello$" } )
+npc:addAliasKeyword( { "hello$" } )
 
 npc:addAction(
 	ACTION_GREET,
@@ -84,7 +84,7 @@ npc:addAction(
 	end
 )
 
-npc:addAliasAction( { "hello$" } )
+npc:addAliasKeyword( { "hello$" } )
 
 npc:addAction(
 	ACTION_VANISH,
@@ -97,10 +97,11 @@ npc:addAction(
 	ACTION_FAREWELL,
 	{
 		keywords = { "bye" },
-			{ "farewell" },
 		reply = "Farewell, %N!"
 	}
 )
+
+npc:addAliasKeyword( { "farewell" } )
 
 npc:addAction(
 	ACTION_KEYWORD,
@@ -196,8 +197,8 @@ npc:addAction(
 	end
 )
 
-npc:addAliasAction( { "fuck" } )
-npc:addAliasAction( { "asshole" } )
+npc:addAliasKeyword( { "fuck" } )
+npc:addAliasKeyword( { "asshole" } )
 
 npc:addAction(
 	ACTION_KEYWORD,
@@ -350,7 +351,7 @@ npc:addAction(
 	end
 )
 
-npc:addAliasAction( { "seven" } )
+npc:addAliasKeyword( { "seven" } )
 
 npc:addAction(
 	ACTION_KEYWORD,
