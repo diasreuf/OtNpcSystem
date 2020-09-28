@@ -1,5 +1,5 @@
 --[[
-* OtNpcSystem v0.4
+* OtNpcSystem v0.5
 * by Robson Dias (diasreuf@gmail.com)
 * Based in "Advanced NPC System by Jiddo"
 ]]--
@@ -35,16 +35,17 @@ DEFAULT_REPLY_VANISH = "How rude!"
 ]]--
 
 OtNpcSystem = {
-	
 	Actions = nil,
 	Focuses = nil,
 	TalkStates = nil,
 	TalkLasts = nil,
 	TradeWindows = nil,
-
+	CustomShop = nil,
+	Voices = nil,
+	VoicesLast = 0,
+	Fluids = nil,
 	IdleTime = 30,
 	TalkRadius = 3,
-	
 }
 
 --[[
@@ -61,6 +62,29 @@ function OtNpcSystem:Init()
 	npcsystem.Focuses = {}
 	npcsystem.TalkLasts = {}
 	npcsystem.TradeWindows = {}
+	npcsystem.CustomShop = {}
+	npcsystem.Voices = {}
+	npcsystem.Fluids = {
+		[1] = "Water",
+		[2] = "Blood",
+		[3] = "Beer",
+		[4] = "Slime",
+		[5] = "Lemonade",
+		[6] = "Milk",
+		[7] = "Manafluid",
+		[10] = "Lifefluid",
+		[11] = "Oil",
+		[13] = "Urine",
+		[14] = "Coconut Milk",
+		[15] = "Wine",
+		[19] = "Mud",
+		[21] = "Fruid Juice",
+		[26] = "Lava",
+		[27] = "Rum",
+		[28] = "Swamp",
+		[35] = "Tea",
+		[43] = "Mead"
+	}
 
 	setmetatable( npcsystem, self )
 	self.__index = self
@@ -74,6 +98,14 @@ end
 ]]--
 
 function OtNpcSystem:onThink()
+	
+	if ( self.VoicesLast + 20 ) < os.time() then
+		local voice = self.Voices[ math.random( #self.Voices ) ]
+		if voice and math.random( 100 ) < 25 then
+			selfSay( voice )
+		end
+		self.VoicesLast = os.time()
+	end
 
 	if #self.Focuses == 0 then
 		self:updateFocus()
@@ -274,6 +306,11 @@ function OtNpcSystem:internalKeywordAction( cid, action )
 
 	if not action.parameters.reply then
 		return false
+	end
+
+	if action.parameters.customshop ~= nil then
+		self.CustomShop[ cid ] = nil
+		self.CustomShop[ cid ] = action.parameters.customshop
 	end
 
 	self:processSay( cid, action.parameters.reply )
@@ -497,6 +534,10 @@ function OtNpcSystem:processInternalAction( cid, action )
 		return false
 	end
 	
+	if action.type == ACTION_KEYWORD and not self:isFocused( cid ) then
+		return false
+	end
+	
 	action.action( player, action.parameters, self )
 
 	return true
@@ -541,6 +582,13 @@ function OtNpcSystem:processSayReplace( cid, message )
 		[ "%%T" ] = getFormattedWorldTime()
 	}
 
+	local shop = self:getCustomShop( cid )
+	if shop then
+		parseInfo[ "%%L" ] = shop.level
+		parseInfo[ "%%P" ] = shop.price
+		parseInfo[ "%%S" ] = shop.name
+	end
+
 	for search, replace in pairs( parseInfo ) do
 		message = string.gsub( message, search, replace )
 	end
@@ -562,6 +610,7 @@ function OtNpcSystem:addFocus( cid )
 
 	self.TalkLasts[ cid ] = os.time()
 	self.TradeWindows[ cid ] = {}
+	self.CustomShop[ cid ] = {}
 
 	table.insert( self.Focuses, cid )
 
@@ -586,6 +635,7 @@ function OtNpcSystem:releaseFocus( cid )
 	self.TalkStates[ cid ] = nil
 	self.TalkLasts[ cid ] = nil
 	self.TradeWindows[ cid ] = nil
+	self.CustomShop[ cid ] = nil
 
 	local cidPos = nil
 	for k, v in pairs( self.Focuses ) do
@@ -917,13 +967,27 @@ function OtNpcSystem:addBuyableItem( cid, itemId, itemPrice, subType, itemName )
 	if itemId == nil or type( itemId ) ~= "number" then
 		return false
 	end
+
+	if itemName == nil then
+		local itemtype = ItemType( itemId )
+		if itemtype:isFluidContainer() then
+			local fluidName = self.Fluids[ subType ]
+			if fluidName ~= nil then
+				itemName = string.format( "%s of %s", itemtype:getName(), fluidName:lower() )
+			else
+				itemName = string.format( "%s of unknown", itemtype:getName() )
+			end
+		else
+			itemName = itemtype:getName()
+		end
+	end
 	
 	table.insert( self.TradeWindows[ cid ], {
 		id = itemId,
 		buy = itemPrice,
 		sell = 0,
 		subType = subType,
-		name = ( itemName ~= nil and itemName or ItemType( itemId ):getName() )
+		name = itemName
 	} )
 	
 	return true
@@ -945,13 +1009,74 @@ function OtNpcSystem:addSellableItem( cid, itemId, itemPrice, subType, itemName 
 		return false
 	end
 	
+	if itemName == nil then
+		local itemtype = ItemType( itemId )
+		if itemtype:isFluidContainer() then
+			local fluidName = self.Fluids[ subType ]
+			if fluidName ~= nil then
+				itemName = string.format( "%s of %s", itemtype:getName(), fluidName:lower() )
+			else
+				itemName = string.format( "%s of unknown", itemtype:getName() )
+			end
+		else
+			itemName = itemtype:getName()
+		end
+	end
+	
 	table.insert( self.TradeWindows[ cid ], {
 		id = itemId,
 		buy = 0,
 		sell = itemPrice,
 		subType = subType,
-		name = ( itemName ~= nil and itemName or ItemType( itemId ):getName() )
+		name = itemName
 	} )
 	
 	return true
+end
+
+--[[
+* @func: getCustomShop( cid )
+* @desc: Get player custom shop/parameters
+* @cid: creatureId
+]]--
+
+function OtNpcSystem:getCustomShop( cid )
+	
+	local shop = self.CustomShop[ cid ]
+	if not shop then
+		return nil
+	end
+	
+	return shop
+end
+
+--[[
+* @func: addVoice( text )
+* @desc: Add message to random npc talk
+* @text: message text
+]]--
+
+function OtNpcSystem:addVoice( text )
+	
+	if self.Voices == nil then
+		return false
+	end
+	table.insert( self.Voices, text )
+	
+	return true
+end
+
+--[[
+* @func: getPosition()
+* @desc: Get current npc position (x,y,z)
+]]--
+
+function OtNpcSystem:getPosition()
+	
+	local npc = Npc( getNpcCid() )
+	if not npc then
+		return nil
+	end
+	
+	return npc:getPosition()
 end
