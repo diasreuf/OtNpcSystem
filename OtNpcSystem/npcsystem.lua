@@ -45,7 +45,7 @@ OtNpcSystem = {
 	VoicesLast = 0,
 	Fluids = nil,
 	IdleTime = 30,
-	TalkRadius = 3,
+	TalkRadius = 3
 }
 
 --[[
@@ -105,11 +105,6 @@ function OtNpcSystem:onThink()
 			selfSay( voice )
 		end
 		self.VoicesLast = os.time()
-	end
-
-	if #self.Focuses == 0 then
-		self:updateFocus()
-		return true
 	end
 
 	for pos, cid in pairs( self.Focuses ) do
@@ -198,9 +193,10 @@ function OtNpcSystem:onCreatureSay( cid, type, message )
 	elseif action.type == ACTION_TRADE then
 		self:internalTradeAction( player:getId(), action )
 	end
-	
+
 	self:setTalkState( player:getId(), ( action.parameters.talkstate ~= 0 and action.parameters.talkstate or 0 ) )
 	self.TalkLasts[ player:getId() ] = os.time()
+	self.TradeWindows[ player:getId() ] = {}
 	
 	return true
 end
@@ -281,9 +277,9 @@ function OtNpcSystem:internalVanishAction( cid )
 	
 	local action = self:findAction( cid, ACTION_VANISH )
 	if not action or action.parameters.reply == nil then
-		self:processSay( cid, DEFAULT_REPLY_VANISH )
+		self:processSay( nil, DEFAULT_REPLY_VANISH )
 	else
-		self:processSay( cid, action.parameters.reply )
+		self:processSay( nil, action.parameters.reply )
 	end
 	
 	self:releaseFocus( cid )
@@ -486,7 +482,7 @@ end
 function OtNpcSystem:processInternalKeyword( keywords, message )
 	local ret = true
 	for _, keyword in pairs( keywords ) do
-		local a, b = string.find( message, keyword )
+		local a, b = string.find( message:lower(), keyword:lower() )
 		if a == nil or b == nil then
 			ret = false
 			break
@@ -552,6 +548,11 @@ end
 
 function OtNpcSystem:processSay( cid, message )
 
+	if cid == nil then
+		selfSay( message )
+		return true
+	end
+
 	if type( message ) == "table" then
 		for _, msg in pairs( message ) do
 			selfSay( self:processSayReplace( cid, msg ), cid )
@@ -586,7 +587,8 @@ function OtNpcSystem:processSayReplace( cid, message )
 	if shop then
 		parseInfo[ "%%L" ] = shop.level
 		parseInfo[ "%%P" ] = shop.price
-		parseInfo[ "%%S" ] = shop.name
+		parseInfo[ "%%S" ] = shop.spell
+		parseInfo[ "%%A" ] = ( shop.amount ~= nil and shop.amount or 0 )
 	end
 
 	for search, replace in pairs( parseInfo ) do
@@ -1061,8 +1063,35 @@ function OtNpcSystem:addVoice( text )
 	if self.Voices == nil then
 		return false
 	end
+	
 	table.insert( self.Voices, text )
 	
+	return true
+end
+
+--[[
+* @func: addBurning( damage, count )
+* @desc: Add burning condition to player
+* @damage: damage to player
+* @count: how many turns
+]]--
+
+function OtNpcSystem:addBurning( cid, count, damage )
+	
+	local player = Player( cid )
+	if not player then
+		return false
+	end
+	
+	local condition = Condition( CONDITION_FIRE )
+	if not condition then
+		return false
+	end
+	
+	condition:setParameter( CONDITION_PARAM_DELAYED, 1 )
+	condition:addDamage( count, 1000, -damage )
+	player:addCondition( condition )
+
 	return true
 end
 
