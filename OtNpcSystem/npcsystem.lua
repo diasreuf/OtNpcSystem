@@ -1,5 +1,5 @@
 --[[
-* OtNpcSystem v0.5
+* OtNpcSystem v1.0
 * by Robson Dias (diasreuf@gmail.com)
 * Based in "Advanced NPC System by Jiddo"
 ]]--
@@ -21,13 +21,38 @@ ACTION_KEYWORD = 5
 ACTION_TRADE = 6
 
 --[[
+* @constants: Default Custom State Types
+* @desc: Constant indexes for defining npc custom state
+]]--
+
+STATE_BANKMONEY = 1
+STATE_BANKPLAYER = 2
+STATE_MARRIAGEID = 3
+
+--[[
 * @constants: Default Messages for all NPCs
 * @desc: Constant indexes for defining default messages
 ]]--
 
-DEFAULT_REPLY_GREET = "Hello, %N!"
-DEFAULT_REPLY_FAREWELL = "Good bye, %N!"
-DEFAULT_REPLY_VANISH = "How rude!"
+DEFAULT_REPLY_GREET = 1
+DEFAULT_REPLY_FAREWELL = 2
+DEFAULT_REPLY_VANISH = 3
+DEFAULT_REPLY_SPELLSHOP_ALREADYKNOWN = 4
+DEFAULT_REPLY_SPELLSHOP_CANNOTLEARN = 5
+DEFAULT_REPLY_SPELLSHOP_NOTENOUGHLEVEL = 6
+DEFAULT_REPLY_SPELLSHOP_NOTENOUGHMONEY = 7
+DEFAULT_REPLY_SPELLSHOP_LEARNEDSPELL = 8
+DEFAULT_REPLY_SPELLSHOP_CANCELLEARN = 9
+DEFAULT_REPLY_SPELLSHOP_WANTBUY = 10
+DEFAULT_REPLY_SPELLSHOP_WANTBUY_FREE = 11
+
+--[[
+* @constants: Spell shop types
+* @desc: Constant indexes for defining spell shop types
+]]--
+
+SPELLSHOP_TYPE_RUNE = 1
+SPELLSHOP_TYPE_INSTANT = 2
 
 --[[
 * @func: OtNpcSystem
@@ -43,9 +68,14 @@ OtNpcSystem = {
 	CustomShop = nil,
 	Voices = nil,
 	VoicesLast = 0,
+	VoiceTime = 50,
+	IdleTime = 90,
+	TalkRadius = 3,
 	Fluids = nil,
-	IdleTime = 30,
-	TalkRadius = 3
+	SpellShop = nil,
+	SpellShopReply = nil,
+	SpellList = nil,
+	CustomStates = nil
 }
 
 --[[
@@ -85,6 +115,23 @@ function OtNpcSystem:Init()
 		[35] = "Tea",
 		[43] = "Mead"
 	}
+	npcsystem.SpellShop = false
+	npcsystem.SpellList = {}
+	npcsystem.CustomStates = {}
+	
+	npcsystem.DefaultReply = {
+		[DEFAULT_REPLY_GREET] = "Hello, %N!",
+		[DEFAULT_REPLY_FAREWELL] = "Good bye, %N!",
+		[DEFAULT_REPLY_VANISH] = "How rude!",
+		[DEFAULT_REPLY_SPELLSHOP_ALREADYKNOWN] = "You already know that spell.",
+		[DEFAULT_REPLY_SPELLSHOP_ALREADYKNOWN] = "Your vocation cannot learn this spell.",
+		[DEFAULT_REPLY_SPELLSHOP_NOTENOUGHLEVEL] = "You do not have enough level to learn this spell.",
+		[DEFAULT_REPLY_SPELLSHOP_NOTENOUGHMONEY] = "You do not have enough gold.",
+		[DEFAULT_REPLY_SPELLSHOP_LEARNEDSPELL] = "From now on you can cast this spell.",
+		[DEFAULT_REPLY_SPELLSHOP_CANCELLEARN] = "I thought so.",
+		[DEFAULT_REPLY_SPELLSHOP_WANTBUY] = "Do you want to buy the spell {%s} for %d gold?",
+		[DEFAULT_REPLY_SPELLSHOP_WANTBUY_FREE] = "Do you want to buy the spell '%s' for free?"
+	}
 
 	setmetatable( npcsystem, self )
 	self.__index = self
@@ -98,11 +145,13 @@ end
 ]]--
 
 function OtNpcSystem:onThink()
-	
-	if ( self.VoicesLast + 20 ) < os.time() then
-		local voice = self.Voices[ math.random( #self.Voices ) ]
-		if voice and math.random( 100 ) < 25 then
-			selfSay( voice )
+
+	if ( ( self.VoicesLast + self.VoiceTime ) < os.time() ) and ( #Game.getSpectators( self:getPosition(), false, true, 7, 7, 7, 7 ) >= 1 ) then
+		if #self.Voices > 0 then
+			local voice = self.Voices[ math.random( #self.Voices ) ]
+			if voice and math.random( 100 ) < 25 then
+				selfSay( voice )
+			end
 		end
 		self.VoicesLast = os.time()
 	end
@@ -186,18 +235,22 @@ function OtNpcSystem:onCreatureSay( cid, type, message )
 		self:internalGreetAction( player:getId(), action )
 	elseif action.type == ACTION_FAREWELL then
 		self:internalFarewellAction( player:getId(), action )
-	elseif action.type == ACTION_KEYWORD then
+	elseif action.type == ACTION_KEYWORD and type == TALKTYPE_PRIVATE_PN then
 		self:internalKeywordAction( player:getId(), action )
 	elseif action.type == ACTION_NOTFOCUSED then
 		self:internalNotFocusedAction( player:getId(), action )
-	elseif action.type == ACTION_TRADE then
+	elseif action.type == ACTION_TRADE and type == TALKTYPE_PRIVATE_PN then
 		self:internalTradeAction( player:getId(), action )
 	end
 
-	self:setTalkState( player:getId(), ( action.parameters.talkstate ~= 0 and action.parameters.talkstate or 0 ) )
 	self.TalkLasts[ player:getId() ] = os.time()
-	self.TradeWindows[ player:getId() ] = {}
 	
+	if action.parameters.resetState ~= nil and action.parameters.resetState == false then
+		return true
+	end
+
+	self:setTalkState( player:getId(), ( action.parameters.talkstate ~= 0 and action.parameters.talkstate or 0 ) )
+
 	return true
 end
 
@@ -213,16 +266,22 @@ function OtNpcSystem:internalGreetAction( cid, action )
 	if self:isFocused( cid ) then
 		return false
 	end
-
+	
+	if action.parameters.randomReply ~= nil then
+		self:processSay( cid, action.parameters.randomReply[ math.random( #action.parameters.randomReply ) ] )
+		self:addFocus( cid )
+		return true
+	end
+	
 	if action.parameters.reply then
 		self:processSay( cid, action.parameters.reply )
 		self:addFocus( cid )
 		return true
 	end
-	
+
 	local action = self:findAction( cid, ACTION_GREET )
 	if not action or action.parameters.reply == nil then
-		self:processSay( cid, DEFAULT_REPLY_GREET )
+		self:processSay( cid, self:getDefaultReply( DEFAULT_REPLY_GREET ) )
 	else
 		self:processSay( cid, action.parameters.reply )
 	end
@@ -244,16 +303,22 @@ function OtNpcSystem:internalFarewellAction( cid, action )
 	if not self:isFocused( cid ) then
 		return false
 	end
+	
+	if action ~= nil and action.parameters.randomReply ~= nil then
+		self:processSay( cid, action.parameters.randomReply[ math.random( #action.parameters.randomReply ) ] )
+		self:releaseFocus( cid )
+		return true
+	end
 
 	if action ~= nil and action.parameters.reply ~= nil then
 		self:processSay( cid, action.parameters.reply )
 		self:releaseFocus( cid )
 		return true
 	end
-	
+
 	local action = self:findAction( cid, ACTION_FAREWELL )
 	if not action or action.parameters.reply == nil then
-		self:processSay( cid, DEFAULT_REPLY_FAREWELL )
+		self:processSay( cid, self:getDefaultReply( DEFAULT_REPLY_FAREWELL ) )
 	else
 		self:processSay( cid, action.parameters.reply )
 	end
@@ -274,12 +339,16 @@ function OtNpcSystem:internalVanishAction( cid )
 	if not self:isFocused( cid ) then
 		return false
 	end
-	
+
 	local action = self:findAction( cid, ACTION_VANISH )
-	if not action or action.parameters.reply == nil then
-		self:processSay( nil, DEFAULT_REPLY_VANISH )
+	if not action then
+		self:processSay( nil, self:processSayReplace( nil, self:getDefaultReply( DEFAULT_REPLY_VANISH ) ) )
 	else
-		self:processSay( nil, action.parameters.reply )
+		if action.parameters.randomReply ~= nil then
+			self:processSay( nil, action.parameters.randomReply[ math.random( #action.parameters.randomReply ) ] )
+		else
+			self:processSay( nil, self:processSayReplace( nil, action.parameters.reply ) )
+		end
 	end
 	
 	self:releaseFocus( cid )
@@ -300,13 +369,13 @@ function OtNpcSystem:internalKeywordAction( cid, action )
 		return false
 	end
 
-	if not action.parameters.reply then
-		return false
+	if action.parameters.randomReply ~= nil then
+		self:processSay( cid, action.parameters.randomReply[ math.random( #action.parameters.randomReply ) ] )
+		return true
 	end
 
-	if action.parameters.customshop ~= nil then
-		self.CustomShop[ cid ] = nil
-		self.CustomShop[ cid ] = action.parameters.customshop
+	if not action.parameters.reply then
+		return false
 	end
 
 	self:processSay( cid, action.parameters.reply )
@@ -331,7 +400,7 @@ function OtNpcSystem:internalNotFocusedAction( cid, action )
 		return false
 	end
 	
-	self:processSay( cid, action.parameters.reply )
+	self:processSay( nil, self:processSayReplace( cid, action.parameters.reply ) )
 
 	return true
 end
@@ -441,8 +510,8 @@ function OtNpcSystem:findAction( cid, value )
 	end
 	
 	for _, action in pairs( self.Actions ) do
-		if ( ( type( value ) == "number" and action.type == value ) or ( type( value ) == "string" and self:findActionKeyword( action, value ) ) ) and self:processInternalCondition( cid, action ) then
-			self:processInternalAction( cid, action )
+		if ( ( type( value ) == "number" and action.type == value ) or ( type( value ) == "string" and self:findActionKeyword( action, value ) ) ) and self:processInternalCondition( cid, action, value ) then
+			self:processInternalAction( cid, action, value )
 			return action
 		end
 	end
@@ -498,17 +567,22 @@ end
 * @action: npc action
 ]]--
 
-function OtNpcSystem:processInternalCondition( cid, action )
+function OtNpcSystem:processInternalCondition( cid, action, message )
 	
 	local player = Player( cid )
 	if not player then
 		return false
 	end
 
-	if action.condition and not action.condition( player, action.parameters, self ) then
+	if action.condition and not action.condition( player, action.parameters, self, message ) then
 		return false
 	end
 	
+	if action.parameters.customshop ~= nil then
+		self.CustomShop[ cid ] = nil
+		self.CustomShop[ cid ] = action.parameters.customshop
+	end
+
 	return true
 end
 
@@ -519,7 +593,7 @@ end
 * @action: npc action
 ]]--
 
-function OtNpcSystem:processInternalAction( cid, action )
+function OtNpcSystem:processInternalAction( cid, action, message )
 	
 	local player = Player( cid )
 	if not player then
@@ -534,7 +608,10 @@ function OtNpcSystem:processInternalAction( cid, action )
 		return false
 	end
 	
-	action.action( player, action.parameters, self )
+	self.TradeWindows[ player:getId() ] = nil
+	self.TradeWindows[ player:getId() ] = {}
+	
+	action.action( player, action.parameters, self, message )
 
 	return true
 end
@@ -550,6 +627,10 @@ function OtNpcSystem:processSay( cid, message )
 
 	if cid == nil then
 		selfSay( message )
+		return true
+	end
+	
+	if message == nil then
 		return true
 	end
 
@@ -580,7 +661,8 @@ function OtNpcSystem:processSayReplace( cid, message )
 
 	local parseInfo = {
 		[ "%%N" ] = player:getName(),
-		[ "%%T" ] = getFormattedWorldTime()
+		[ "%%T" ] = Game.getFormattedWorldTime(),
+		[ "%%X" ] = self:getName()
 	}
 
 	local shop = self:getCustomShop( cid )
@@ -742,7 +824,7 @@ end
 ]]--
 
 function OtNpcSystem:isInTalkRadius( cid )
-	return ( self.TalkRadius >= getDistanceBetween( getCreaturePosition( getNpcCid() ), getPlayerPosition( cid ) ) )
+	return ( self:getTalkRadius() >= Game.getDistanceBetween( self:getPosition(), getPlayerPosition( cid ) ) )
 end
 
 --[[
@@ -800,8 +882,8 @@ end
 ]]--
 
 function OtNpcSystem:getCount( message )
-	local b, e = string:find( "%d+" )
-	return b and e and tonumber( string:sub( b, e ) ) or -1
+	local b, e = message:find( "%d+" )
+	return b and e and tonumber( message:sub( b, e ) ) or -1
 end
 
 --[[
@@ -821,6 +903,38 @@ function OtNpcSystem:setIdle( cid )
 	end, 1000, self, cid )
 	
 	return true
+end
+
+--[[
+* @func: getPosition()
+* @desc: Get current npc position ( x,y,z )
+]]--
+
+function OtNpcSystem:getPosition()
+	
+	local npc = Npc( getNpcCid() )
+	if not npc then
+		return nil
+	end
+	
+	return npc:getPosition()
+
+end
+
+--[[
+* @func: getPosition()
+* @desc: Get current npc position ( x,y,z )
+]]--
+
+function OtNpcSystem:getName()
+	
+	local npc = Npc( getNpcCid() )
+	if not npc then
+		return nil
+	end
+	
+	return npc:getName()
+
 end
 
 --[[
@@ -847,13 +961,13 @@ function OtNpcSystem:internalBuyCallback( cid, itemid, subType, amount, ignoreCa
 	end
 
 	local backpackId = 1988
-	local totalCost = amount * shopItem.buy
+	local totalCost = ( amount * shopItem.buy )
 	
 	if inBackpacks then
-		totalCost = isItemStackable( itemid ) == true and totalCost + 20 or totalCost + ( math.max(1, math.floor( amount / getContainerCapById( backpackId ) ) ) * 20 )
+		totalCost = ( isItemStackable( itemid ) and ( totalCost + 20 ) or ( totalCost + ( math.max( 1, math.floor( amount / getContainerCapById( backpackId ) ) ) * 20 ) ) )
 	end
 	
-	local subType = shopItem.subType or 1
+	local subType = shopItem.subType
 	local a, b = doNpcSellItem( cid, itemid, amount, subType, ignoreCap, inBackpacks, backpackId )
 	
 	if a < amount then
@@ -869,12 +983,21 @@ function OtNpcSystem:internalBuyCallback( cid, itemid, subType, amount, ignoreCa
 	end
 	
 	doPlayerTakeMoney( player:getId(), totalCost )
-	doPlayerSendTextMessage( cid, MESSAGE_INFO_DESCR, string.format( "Bought %dx %s for %d gold.", amount, ItemType( itemid ):getName(), totalCost ) )
+	doPlayerSendTextMessage( player:getId(), MESSAGE_INFO_DESCR, string.format( "Bought %dx %s for %d gold.", amount, ItemType( itemid ):getName(), totalCost ) )
+
+	-- Interior Decorator (Achievement)
+	-- Obtained by purchasing 1000 furniture packages
+
+	if ( itemid >= 3901 and itemid <= 3908 ) or ( itemid >= 3910 and itemid <= 3937 ) or isInArray( { 6114, 6115, 6373, 7904, 7905, 7906, 7907, 8692, 11126, 11133, 11205 }, itemid ) then
+		player:updateAchievement( 168 ) -- Interior Decorator
+	end
 
 	local action = self:findAction( cid, ACTION_TRADE_BUY_REPLY )
 	if action ~= false and action.parameters.reply ~= nil then
 		self:processSay( cid, string.gsub( action.parameters.reply, "%%P", totalCost ) )
 	end
+	
+	Game.outputConsoleMessage( string.format( "%s bought %dx %s for %d gold from %s.", player:getName(), amount, ItemType( itemid ):getName(), totalCost, self:getName() ) )
 	
 	self.TalkLasts[ player:getId() ] = os.time()
 
@@ -909,12 +1032,15 @@ function OtNpcSystem:internalSellCallback( cid, itemid, subType, amount, ignoreC
 	end
 	
 	local totalCost = ( amount * shopItem.sell )
-
 	if not doPlayerRemoveItem( player:getId(), itemid, amount, subType, ignoreEquipped ) then
 		doPlayerSendCancel( player:getId(), "You do not have this object." )
 		return false
 	end
-	
+
+	if player:isPremium() then
+		totalCost = math.ceil( totalCost + ( totalCost * 0.05 ) )
+	end
+
 	doPlayerAddMoney( player:getId(), totalCost )
 	doPlayerSendTextMessage( player:getId(), MESSAGE_INFO_DESCR, string.format( "Sold %dx %s for %d gold.", amount, ItemType( itemid ):getName():lower(), totalCost ) )
 
@@ -922,6 +1048,8 @@ function OtNpcSystem:internalSellCallback( cid, itemid, subType, amount, ignoreC
 	if action ~= false and action.parameters.reply ~= nil then
 		self:processSay( player:getId(), string.gsub( action.parameters.reply, "%%P", totalCost ) )
 	end
+		
+	Game.outputConsoleMessage( string.format( "%s sold %dx %s for %d gold to %s.", player:getName(), amount, ItemType( itemid ):getName():lower(), totalCost, self:getName() ) )
 	
 	self.TalkLasts[ player:getId() ] = os.time()
 
@@ -943,12 +1071,28 @@ function OtNpcSystem:internalGetTradeItem( cid, itemId, subType, onBuy )
 	if not tradeWindow then
 		return nil
 	end
-	
+
 	for i = 1, #tradeWindow do
+
 		local shopItem = self.TradeWindows[ cid ][ i ]
-		if ( ( isItemFluidContainer( shopItem.id ) and shopItem.id == itemId and shopItem.subType == subType ) or shopItem.id == itemId ) and ( not onBuy and shopItem.sell > 0 or onBuy and shopItem.buy > 0 ) then
+		if not shopItem then
+			goto continue
+		end
+
+		if shopItem.id ~= itemId then
+			goto continue
+		end
+
+		if shopItem.subType ~= nil and shopItem.subType ~= subType and ItemType( itemId ):isFluidContainer() then
+			goto continue
+		end
+
+		if ( not onBuy and shopItem.sell > 0 or onBuy and shopItem.buy > 0 ) then
 			return shopItem
 		end
+
+		::continue::
+
 	end
 	
 	return nil
@@ -977,7 +1121,7 @@ function OtNpcSystem:addBuyableItem( cid, itemId, itemPrice, subType, itemName )
 			if fluidName ~= nil then
 				itemName = string.format( "%s of %s", itemtype:getName(), fluidName:lower() )
 			else
-				itemName = string.format( "%s of unknown", itemtype:getName() )
+				itemName = itemtype:getName()
 			end
 		else
 			itemName = itemtype:getName()
@@ -987,7 +1131,7 @@ function OtNpcSystem:addBuyableItem( cid, itemId, itemPrice, subType, itemName )
 	table.insert( self.TradeWindows[ cid ], {
 		id = itemId,
 		buy = itemPrice,
-		sell = 0,
+		sell = -1,
 		subType = subType,
 		name = itemName
 	} )
@@ -1018,7 +1162,7 @@ function OtNpcSystem:addSellableItem( cid, itemId, itemPrice, subType, itemName 
 			if fluidName ~= nil then
 				itemName = string.format( "%s of %s", itemtype:getName(), fluidName:lower() )
 			else
-				itemName = string.format( "%s of unknown", itemtype:getName() )
+				itemName = itemtype:getName()
 			end
 		else
 			itemName = itemtype:getName()
@@ -1027,7 +1171,7 @@ function OtNpcSystem:addSellableItem( cid, itemId, itemPrice, subType, itemName 
 	
 	table.insert( self.TradeWindows[ cid ], {
 		id = itemId,
-		buy = 0,
+		buy = -1,
 		sell = itemPrice,
 		subType = subType,
 		name = itemName
@@ -1089,23 +1233,369 @@ function OtNpcSystem:addBurning( cid, count, damage )
 	end
 	
 	condition:setParameter( CONDITION_PARAM_DELAYED, 1 )
-	condition:addDamage( count, 1000, -damage )
+	condition:addDamage( count, 2000, -damage )
 	player:addCondition( condition )
 
 	return true
 end
 
 --[[
-* @func: getPosition()
-* @desc: Get current npc position (x,y,z)
+* @func: addBuyableSpell( spell, price, level  )
+* @desc: Add spell to NPC spell shop
+* @spell: spell name
+* @price: price in gold coins
+* @level: level required
 ]]--
 
-function OtNpcSystem:getPosition()
+function OtNpcSystem:addBuyableSpell( name, price, level, type )
+
+	local keywords = {}
+	for word in name:gmatch( "%w+" ) do
+		table.insert( keywords, word:lower() )
+	end
+
+	self:addAction(
+		ACTION_KEYWORD,
+		{
+			keywords = keywords,
+			reply = ( price > 0 and string.format( self:getDefaultReply( DEFAULT_REPLY_SPELLSHOP_WANTBUY ), name, price ) or string.format( self:getDefaultReply( DEFAULT_REPLY_SPELLSHOP_WANTBUY_FREE ), name ) ),
+			customshop = {
+				name = name,
+				price = price,
+				level = level
+			},
+			talkstate = 142999
+		},
+		function( player, parameters, self )
+			return true
+		end
+	)
+
+	table.insert( self.SpellList, { name = name, type = type } )
+
+	return true
+end
+
+--[[
+* @func: addSpellShop()
+* @desc: Add spell shop actions to npc
+]]--
+
+function OtNpcSystem:addSpellShop()
+
+	if #self.SpellList > 0 then
 	
-	local npc = Npc( getNpcCid() )
-	if not npc then
-		return nil
+		local rune_spells = {}
+		local instant_spells = {}
+		
+		for _, spell in pairs( self.SpellList ) do
+			if spell.type == SPELLSHOP_TYPE_RUNE then
+				table.insert( rune_spells, spell )
+			elseif spell.type == SPELLSHOP_TYPE_INSTANT then
+				table.insert( instant_spells, spell )
+			end
+		end
+
+		if #rune_spells > 0 then
+			
+			local rune_id = 1
+			local rune_spells_gen = {}
+			
+			for _, spell in pairs( rune_spells ) do
+				
+				if _ % 6 == 1 then
+					rune_id = rune_id + 1
+				end
+				
+				if _ == 1 then
+					if #rune_spells == 1 then
+						rune_spells_gen[ rune_id ] = string.format( "In this category I have {%s}.", spell.name )
+					else
+						rune_spells_gen[ rune_id ] = string.format( "In this category I have {%s}", spell.name )
+					end
+				elseif _ == #rune_spells then
+					if rune_spells_gen[ rune_id ] == nil then
+						rune_spells_gen[ rune_id ] = string.format( "Finally we also have {%s}.", spell.name )
+					else
+						rune_spells_gen[ rune_id ] = string.format( "%s and {%s}.", rune_spells_gen[ rune_id ], spell.name )
+					end
+				else
+					if rune_spells_gen[ rune_id ] == nil then
+						rune_spells_gen[ rune_id ] = string.format( "{%s}", spell.name )
+					else
+						rune_spells_gen[ rune_id ] = string.format( "%s, {%s}", rune_spells_gen[ rune_id ], spell.name )
+					end
+				end
+				
+			end
+	
+			for _, reply_line in pairs( rune_spells_gen ) do
+				if _ ~= #rune_spells_gen then
+					rune_spells_gen[ _ ] = string.format( "%s ...", rune_spells_gen[ _ ] )
+				end
+			end
+			
+			self:addAction(
+				ACTION_KEYWORD,
+				{
+					keywords = { "rune" },
+					reply = rune_spells_gen
+				}
+			)
+			
+			self:addAliasKeyword( { "rune", "spells" } )
+			
+		end
+		
+		
+		if #instant_spells > 0 then
+			
+			local instant_id = 1
+			local instant_spells_gen = {}
+			
+			for _, spell in pairs( instant_spells ) do
+				
+				if _ % 7 == 1 then
+					instant_id = instant_id + 1
+				end
+				
+				if _ == 1 then
+					if #instant_spells == 1 then
+						instant_spells_gen[ instant_id ] = string.format( "In this category I have {%s}.", spell.name )
+					else
+						instant_spells_gen[ instant_id ] = string.format( "In this category I have {%s}", spell.name )
+					end
+				elseif _ == #instant_spells then
+					if instant_spells_gen[ instant_id ] == nil then
+						instant_spells_gen[ instant_id ] = string.format( "Finally we also have {%s}.", spell.name )
+					else
+						instant_spells_gen[ instant_id ] = string.format( "%s and {%s}.", instant_spells_gen[ instant_id ], spell.name )
+					end
+				else
+					if instant_spells_gen[ instant_id ] == nil then
+						instant_spells_gen[ instant_id ] = string.format( "{%s}", spell.name )
+					else
+						instant_spells_gen[ instant_id ] = string.format( "%s, {%s}", instant_spells_gen[ instant_id ], spell.name )
+					end
+				end
+				
+			end
+			
+			for _, reply_line in pairs( instant_spells_gen ) do
+				if _ ~= #instant_spells_gen then
+					instant_spells_gen[ _ ] = string.format( "%s ...", instant_spells_gen[ _ ] )
+				end
+			end
+
+			self:addAction(
+				ACTION_KEYWORD,
+				{
+					keywords = { "instant" },
+					reply = instant_spells_gen
+				}
+			)
+			
+			self:addAliasKeyword( { "instant", "spells" } )
+			
+		end
+
+		if #rune_spells > 0 and #instant_spells > 0 then
+		
+			self:addAction(
+				ACTION_KEYWORD,
+				{
+					keywords = { "spells$" },
+					reply = "I can teach you some {instant} spells and {rune} spells. What kind of spell do you wish to learn?"
+				}
+			)
+			
+		elseif #rune_spells > 0 then
+				
+			self:addAction(
+				ACTION_KEYWORD,
+				{
+					keywords = { "spells$" },
+					reply = "I can teach you some {rune} spells."
+				}
+			)
+			
+		elseif #instant_spells > 0 then
+				
+			self:addAction(
+				ACTION_KEYWORD,
+				{
+					keywords = { "spells$" },
+					reply = "I can teach you some {instant} spells."
+				}
+			)
+			
+		end
+		
+		rune_id = nil
+		rune_spells = nil
+		rune_spells_gen = nil
+	
+		instant_id = nil
+		instant_spells = nil
+		instant_spells_gen = nil
+		
+		self.SpellList = nil
+
+	end
+
+	self:addAction(
+		ACTION_KEYWORD,
+		{
+			keywords = { "yes" },
+			reply = self:getDefaultReply( DEFAULT_REPLY_SPELLSHOP_ALREADYKNOWN )
+		},
+		function( player, parameters, self )
+			local shop = self:getCustomShop( player:getId() )
+			if not shop then
+				return false
+			end
+			return self:getTalkState( player:getId() ) == 142999 and player:hasLearnedSpell( shop.name )
+		end
+	)
+
+	self:addAction(
+		ACTION_KEYWORD,
+		{
+			keywords = { "yes" },
+			reply = self:getDefaultReply( DEFAULT_REPLY_SPELLSHOP_NOTENOUGHLEVEL )
+		},
+		function( player, parameters, self )
+			local shop = self:getCustomShop( player:getId() )
+			if not shop then
+				return false
+			end
+			return self:getTalkState( player:getId() ) == 142999 and shop.level > player:getLevel()
+		end
+	)
+
+	self:addAction(
+		ACTION_KEYWORD,
+		{
+			keywords = { "yes" },
+			reply = self:getDefaultReply( DEFAULT_REPLY_SPELLSHOP_ALREADYKNOWN )
+		},
+		function( player, parameters, self )
+			local shop = self:getCustomShop( player:getId() )
+			if not shop then
+				return false
+			end
+			return self:getTalkState( player:getId() ) == 142999 and not player:canLearnSpell( shop.name )
+		end
+	)
+	
+	self:addAction(
+		ACTION_KEYWORD,
+		{
+			keywords = { "yes" },
+			reply = self:getDefaultReply( DEFAULT_REPLY_SPELLSHOP_LEARNEDSPELL )
+		},
+		function( player, parameters, self )
+			local shop = self:getCustomShop( player:getId() )
+			if not shop then
+				return false
+			end
+			return self:getTalkState( player:getId() ) == 142999 and player:getMoney() >= shop.price
+		end,
+		function( player, parameters, self )
+			
+			local shop = self:getCustomShop( player:getId() )
+			if not shop then
+				return false
+			end
+			
+			player:learnSpell( shop.name )
+			player:removeMoney( shop.price )
+			player:getPosition():sendMagicEffect( CONST_ME_MAGIC_BLUE )
+
+			return true
+		end
+	)
+
+	self:addAction(
+		ACTION_KEYWORD,
+		{
+			keywords = { "yes" },
+			reply = self:getDefaultReply( DEFAULT_REPLY_SPELLSHOP_NOTENOUGHMONEY )
+		},
+		function( player, parameters, self )
+			return self:getTalkState( player:getId() ) == 142999
+		end
+	)
+
+	self:addAction(
+		ACTION_KEYWORD,
+		{
+			keywords = { "no" },
+			reply = self:getDefaultReply( DEFAULT_REPLY_SPELLSHOP_CANCELLEARN )
+		},
+		function( player, parameters, self )
+			return self:getTalkState( player:getId() ) == 142999
+		end
+	)
+	
+	self.spellShop = true
+
+	return true
+end
+
+--[[
+* @func: setDefaultReply( type, reply )
+* @desc: Set npc default reply
+* @type: constant type
+* @reply: reply value
+]]--
+
+function OtNpcSystem:setDefaultReply( type, reply )
+	self.DefaultReply[ type ] = reply
+	return true
+end
+
+--[[
+* @func: getDefaultReply( type  )
+* @desc: return npc default reply
+* @type: constant type
+]]--
+
+function OtNpcSystem:getDefaultReply( type )
+	if self.DefaultReply[ type ] ~= nil then
+		return self.DefaultReply[ type ]
+	end
+	return nil
+end
+
+--[[
+* @func: setCustomState( cid, state, value )
+* @desc: set internal state value
+* @cid: creature id
+* @state: npc state id
+* @value: state value
+]]--
+
+function OtNpcSystem:setCustomState( cid, state, value )
+
+	if self.CustomStates[ cid ] == nil then
+		self.CustomStates[ cid ] = {}
 	end
 	
-	return npc:getPosition()
+	self.CustomStates[ cid ][ state ] = value
+
+end
+
+--[[
+* @func: getCustomState( cid, state )
+* @desc: get internal state value
+* @cid: creature id
+* @state: npc state id
+]]--
+
+function OtNpcSystem:getCustomState( cid, state )
+	if self.CustomStates[ cid ] ~= nil and self.CustomStates[ cid ][ state ] ~= nil then
+		return self.CustomStates[ cid ][ state ]
+	end
+	return nil
 end
